@@ -1,4 +1,8 @@
 runs
 data
 *.pth
+*.pyc
+*.pt
+__pycache__
+checkpoint.pt
 resnet.py
