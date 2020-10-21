@@ -1,11 +1,7 @@
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
-import torch.nn.functional as F 
-import torchvision
 import torchvision.transforms as transforms
 import torch.optim as optim
-from tqdm import tqdm
 
 def conv3x3(in_planes, out_planes, stride=1,dilation=1):
     """3x3 convolution with padding"""
@@ -13,9 +9,9 @@ def conv3x3(in_planes, out_planes, stride=1,dilation=1):
                      padding=dilation,bias=False, dilation=dilation)
 
 
-def conv1x1(in_planes, out_planes,padding = 1,stride=1):
+def conv1x1(in_planes, out_planes):
     """1x1 convolution"""
-    return nn.Conv2d(in_planes, out_planes, kernel_size=1)#,stride=stride,padding= padding, bias=False)
+    return nn.Conv2d(in_planes, out_planes, kernel_size=1,stride=1, bias=False)
 
 class Linear(nn.Module):
     def __init__(self):
@@ -95,8 +91,7 @@ class CSPBottleneck(nn.Module):
     def forward(self, x):
         identity = x
         #print("x")
-        #print(type(x))
-
+        
         out = self.conv1(x)
 
         #print("out")
@@ -118,6 +113,7 @@ class CSPBottleneck(nn.Module):
         if self.downsample is not None:
             identity = self.downsample(x)
 
+
         out += identity
         out = self.lrelu(out)
 
@@ -135,19 +131,21 @@ class CSPBlock(nn.Module):
             self.activation = nn.LeakyReLU(inplace=True)
         else:
             self.activation = activation()
+        
         self.inplanes = inplanes
         self.norm_layer = norm_layer
-        #self.crossstage =  nn.Conv2d(self.inplanes, self.inplanes*2, kernel_size=1, stride=1, padding=1, bias=False)
-        self.crossstage =  nn.Conv2d(self.inplanes, self.inplanes*2, kernel_size=1)
+        
+        self.crossstage =  nn.Conv2d(self.inplanes, self.inplanes*2, kernel_size=1, stride=1,bias=False)
+        
         self.bn_crossstage = norm_layer(self.inplanes*2)
         
         ## first layer is different from others 
         if(self.inplanes <= 64):
-            self.conv1 = nn.Conv2d(self.inplanes, self.inplanes, kernel_size=1)#, stride=1, padding=1, bias=False)
+            self.conv1 = nn.Conv2d(self.inplanes, self.inplanes, kernel_size=1, stride=1,bias=False)
             self.bn1 =  norm_layer(self.inplanes)
             self.layer_num = self.inplanes
         else:
-            self.conv1 = nn.Conv2d(self.inplanes, self.inplanes*2, kernel_size=1)#, stride=1, padding=1, bias=False)
+            self.conv1 = nn.Conv2d(self.inplanes, self.inplanes*2, kernel_size=1, stride=1,bias=False)
             self.bn1 =  norm_layer(self.inplanes*2)
             self.layer_num = self.inplanes*2
 
@@ -156,7 +154,7 @@ class CSPBlock(nn.Module):
 
         self.layers = self._make_layer(block, self.inplanes, blocks)
         
-        self.trans = nn.Conv2d(self.inplanes*2, self.inplanes*2, kernel_size=1, stride=1, padding=1, bias=False)
+        self.trans = nn.Conv2d(self.inplanes*2, self.inplanes*2, kernel_size=1, stride=1, bias=False)
         
 
     def forward(self, x):
@@ -182,14 +180,14 @@ class CSPBlock(nn.Module):
 
         return out
     
-    def _make_layer(self, block, planes, blocks, stride=1, dilate=False):
+    def _make_layer(self, block, planes, blocks, stride=1):
 
         norm_layer = self.norm_layer
         downsample = None
 
         if stride != 1 or self.layer_num != planes * block.expansion:
             downsample = nn.Sequential(
-                conv1x1(self.inplanes, planes * block.expansion, stride),
+                conv1x1(self.inplanes, planes * block.expansion),
                 norm_layer(planes * block.expansion),
             )
 
@@ -218,12 +216,11 @@ class CSPResNet(nn.Module):
 
         self.inplanes = 64
         
-        self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=1,
-                               bias=False)
+        self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3,bias=False)
         self.bn1 = norm_layer(self.inplanes)
         self.lrelu = nn.LeakyReLU()
 
-        self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2, padding=1)
+        self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
 
 
 
@@ -243,20 +240,18 @@ class CSPResNet(nn.Module):
 
         self.layer4 = CSPBlock(block, 512, layers[3]-1, activation = nn.LeakyReLU)
         
-        self.conv2 = nn.Conv2d(512*block.tran_expansion,512*2, kernel_size=1)# stride=1, padding=1,
-          #                     bias=False)
+        self.conv2 = nn.Conv2d(512*block.tran_expansion,512*2, kernel_size=1,stride=1,bias=False)
         
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         
-        self.conv3 = nn.Conv2d(512*2,num_classes, kernel_size=1)#, )stride=1, padding=1,
-                               #bias=False)
+        #self.conv3 = nn.Conv2d(512*2,num_classes, kernel_size=1,stride=1)
         
         
         self.fn = nn.Linear(512*2,num_classes)
         
         for m in self.modules():
            if isinstance(m, nn.Conv2d):
-               nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+               nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='leaky_relu')
            elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
                nn.init.constant_(m.weight, 1)
                nn.init.constant_(m.bias, 0)
@@ -270,7 +265,7 @@ class CSPResNet(nn.Module):
                    nn.init.constant_(m.bn3.weight, 0)
                elif isinstance(m, BasicBlock):
                    nn.init.constant_(m.bn2.weight, 0)
-    #
+                   
     def _make_tran(self, base,tran_expansion):
         return nn.Sequential(
             conv1x1(base*tran_expansion,base*2),
@@ -296,26 +291,20 @@ class CSPResNet(nn.Module):
         
         x = self.layer3(x)
         x = self.part_tran3(x)
-        #print(x.size())
+        
 
         x = self.layer4(x)
-        #print(x.size())
+        
         x = self.conv2(x)
-        #print(x.size())
+        
         x = self.avgpool(x)
-        #print(x.size())
+        
         
         x = x.view(-1,512*2)
-        #print(x.size())
+        
 
         x = self.fn(x)
 
-        #print(x.size())
-        
-        #x = self.conv3(x)
-        
-        #x = self.sm(x)
-        #print(x.size())
         return x
 
     def forward(self, x):
@@ -364,91 +353,9 @@ def csp_resnet152(pretrained=False, progress=True, **kwargs):
                    **kwargs)
 
 
-def train(net):
-    epoches = 20
-    device = torch.device("cuda:0")
-    print(device)
-    
-
-    transform = transforms.Compose(
-    [transforms.ToTensor(),
-     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
-
-    trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
-                                        download=True, transform=transform)
-    
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=64,
-                                          shuffle=True, num_workers=2)
-
-    testset = torchvision.datasets.CIFAR10(root='./data', train=False,
-                                       download=True, transform=transform)
-    testloader = torch.utils.data.DataLoader(testset, batch_size=64,
-                                        shuffle=False, num_workers=2)
-
-    classes = ('plane', 'car', 'bird', 'cat',
-           'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
-
-
-    
-    
-    #net = Net()
-    net.to(device)
-    
-
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
-    for epoch in range(epoches):  # loop over the dataset multiple times
-        running_loss = 0.0
-        
-        for i, data in tqdm(enumerate(trainloader, 0)):
-            # get the inputs; data is a list of [inputs, labels]
-            inputs, labels = data[0].to(device), data[1].to(device)
-
-            # zero the parameter gradients
-            optimizer.zero_grad()
-
-            # forward + backward + optimize
-            outputs = net(inputs)
-            loss = criterion(outputs, labels)
-            loss.backward()
-            optimizer.step()
-
-            # print statistics
-            running_loss += loss.item()
-            if i % 200 == 199:    # print every 2000 mini-batches
-                print('[%d, %5d] loss: %.3f' %
-                    (epoch + 1, i + 1, running_loss / 200))
-                running_loss = 0.0
-
-        correct = 0
-        total = 0
-        with torch.no_grad():
-            for data in testloader:
-                images, labels = data[0].to(device), data[1].to(device)
-                outputs = net(images)
-                _, predicted = torch.max(outputs.data, 1)
-                total += labels.size(0)
-                correct += (predicted == labels).sum().item()
-
-        print('Accuracy of the network on the 10000 test images: %d %%' % (
-        100 * correct / total))
-
-        print('Finished Training')
-
-    PATH = './cifar_net.pth'
-    torch.save(net.state_dict(), PATH)
-    #net(input_data)
-    #net = torchvision.models.resnet18()
-    #print(net)
-    #writer = SummaryWriter()
-    #with writer:
-    #    writer.add_graph(net, (input_data,))
-
 
 if __name__ == "__main__":
-    
     net = csp_resnet152(pretrained=False,num_classes = 10)
-    print(net)
-    train(net)
-
+    y = net(torch.randn(1, 3, 112, 112))
+    print(y.size())   
 
