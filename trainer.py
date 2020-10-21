@@ -72,6 +72,7 @@ def train(net,n_epoches = 500,
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(net.parameters())
     
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[200,400], gamma=0.1)
    
     train_losses = []
     valid_losses = []
@@ -81,6 +82,9 @@ def train(net,n_epoches = 500,
     
     early_stopping = EarlyStopping(patience=patience, verbose=True)
     
+
+
+
     for epoch in range(1, n_epoches + 1):  # loop over the dataset multiple times
         running_loss = 0.0
         net.train()
@@ -99,6 +103,7 @@ def train(net,n_epoches = 500,
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
+            
             train_losses.append(loss.item())
             
 
@@ -110,6 +115,8 @@ def train(net,n_epoches = 500,
                     (epoch + 1, i + 1, running_loss / 200))
                 running_loss = 0.0
         
+
+        scheduler.step()
 
         net.eval() # prep model for evaluation
         for data, target in validloader:
@@ -167,7 +174,7 @@ if __name__ == "__main__":
     net = csp_resnet152(pretrained=False,num_classes = 10)
     #y = net(torch.randn(1, 3, 112, 112))
     #print(y.size())  
-    train_loss, valid_loss,test_acces = train(net,n_epoches = 5,patience =20,valid_size =  0.2,batch_size =  64)
+    train_loss, valid_loss,test_acces = train(net,n_epoches = 500,patience =20,valid_size =  0.2,batch_size = 128)
     
     fig = plt.figure()
     plt.plot(range(1,len(train_loss)+1),train_loss, label='Training Loss')
