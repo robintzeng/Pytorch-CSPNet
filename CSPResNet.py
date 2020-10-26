@@ -311,45 +311,43 @@ class CSPResNet(nn.Module):
         return self._forward_impl(x)
 
 
-def _cspresnet(arch, block, layers, pretrained, progress, **kwargs):
+def _cspresnet(arch, block, layers, pretrained,model_path, **kwargs):
     model = CSPResNet(block, layers, **kwargs)
     if pretrained:
-        pass
-        #state_dict = load_state_dict_from_url(model_urls[arch],
-        #                                     progress=progress)
-        #model.load_state_dict(state_dict)
+        state_dict = torch.load(model_path)
+        model.load_state_dict(state_dict)
     return model
 
-def csp_resnet50(pretrained=False, progress=True, **kwargs):
+def csp_resnet50(pretrained=False,model_path = "checkpoint.pt",**kwargs):
     r"""ResNet-50 model from
     `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
         progress (bool): If True, displays a progress bar of the download to stderr
     """
-    return _cspresnet('cspresnet50', CSPBottleneck, [3, 4, 6, 3], pretrained, progress,
+    return _cspresnet('cspresnet50', CSPBottleneck, [3, 4, 6, 3], pretrained,model_path = model_path,
                    **kwargs)
 
 
-def csp_resnet101(pretrained=False, progress=True, **kwargs):
+def csp_resnet101(pretrained=False,model_path = "checkpoint.pt", **kwargs):
     r"""ResNet-101 model from
     `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
         progress (bool): If True, displays a progress bar of the download to stderr
     """
-    return _cspresnet('cspresnet101', CSPBottleneck, [3, 4, 23, 3], pretrained, progress,
+    return _cspresnet('cspresnet101', CSPBottleneck, [3, 4, 23, 3], pretrained,model_path = model_path,
                    **kwargs)
 
 
-def csp_resnet152(pretrained=False, progress=True, **kwargs):
+def csp_resnet152(pretrained=False,model_path = "checkpoint.pt", **kwargs):
     r"""ResNet-152 model from
     `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
         progress (bool): If True, displays a progress bar of the download to stderr
     """
-    return _cspresnet('cspresnet152', CSPBottleneck, [3, 8, 36, 3], pretrained, progress,
+    return _cspresnet('cspresnet152', CSPBottleneck, [3, 8, 36, 3], pretrained, model_path = model_path,
                    **kwargs)
 
 

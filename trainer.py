@@ -9,8 +9,19 @@ import numpy as np
 from tqdm import tqdm
 from torch.utils.data.sampler import SubsetRandomSampler
 from pytorchtools import EarlyStopping
-from CSPResNet import csp_resnet152
+from CSPResNet import csp_resnet152,csp_resnet50
 import matplotlib.pyplot as plt
+
+class AddGaussianNoise(object):
+    def __init__(self, mean=0., std=1.):
+        self.std = std
+        self.mean = mean
+        
+    def __call__(self, tensor):
+        return tensor + torch.randn(tensor.size()) * self.std + self.mean
+    
+    def __repr__(self):
+        return self.__class__.__name__ + '(mean={0}, std={1})'.format(self.mean, self.std)
 
 classes = ('plane', 'car', 'bird', 'cat',
            'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
@@ -31,16 +42,25 @@ def train(net,n_epoches = 500,
     net.to(device)
 
 
-    transform = transforms.Compose(
-    [transforms.ToTensor(),
-     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+    transform_train = transforms.Compose([
+    #transforms.RandomCrop(32, padding=4),
+    transforms.RandomHorizontalFlip(),
+    transforms.ToTensor(),
+    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    AddGaussianNoise(0., 1.)
+    ])
+
+    transform_test = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    ])
 
 
     trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
-                                        download=True, transform=transform)
+                                        download=True, transform=transform_train)
     
     testset = torchvision.datasets.CIFAR10(root='./data', train=False,
-                                       download=True, transform=transform)
+                                       download=True, transform=transform_test)
     
     num_train = len(trainset)
     indices = list(range(num_train))
@@ -70,9 +90,12 @@ def train(net,n_epoches = 500,
     
 
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(net.parameters())
+    optimizer = torch.optim.Adam(net.parameters(),lr = 0.001)
     
-    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[200,400], gamma=0.1)
+    #optimizer = torch.optim.SGD(net.parameters(), lr=0.01,
+    #                  momentum=0.9, weight_decay=5e-4)
+
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[40,70], gamma=0.1)
    
     train_losses = []
     valid_losses = []
@@ -171,10 +194,12 @@ def train(net,n_epoches = 500,
 
 if __name__ == "__main__":
 
-    net = csp_resnet152(pretrained=False,num_classes = 10)
+    #net = csp_resnet152(pretrained=True,num_classes = 10)
+    net = csp_resnet50(pretrained=False,model_path = "checkpoint res50_79.pt",num_classes = 10)
+    
     #y = net(torch.randn(1, 3, 112, 112))
     #print(y.size())  
-    train_loss, valid_loss,test_acces = train(net,n_epoches = 500,patience =20,valid_size =  0.2,batch_size = 128)
+    train_loss, valid_loss,test_acces = train(net,n_epoches = 500,patience =20,valid_size =  0.1,batch_size = 64)
     
     fig = plt.figure()
     plt.plot(range(1,len(train_loss)+1),train_loss, label='Training Loss')
